@@ -70,8 +70,9 @@ def build_rss(list_id: str, items: list[dict]) -> str:
 
 
 def extract_list_items(page, list_id: str):
-    page.goto(f"{SITE_BASE}{list_id}", wait_until="networkidle", timeout=120000)
+    page.goto(f"{SITE_BASE}{list_id}", wait_until="domcontentloaded", timeout=60000)
     page.wait_for_timeout(5000)
+    page.wait_for_selector("article", timeout=15000)
 
     items = []
     articles = page.locator("article")
@@ -89,12 +90,12 @@ def extract_list_items(page, list_id: str):
         author = None
 
         for link in links:
-            if re.search(r"x\\.com/.+/status/\\d+", link):
+            if re.search(r"x\.com/.+/status/\d+", link):
                 tweet_url = link
                 break
 
         if tweet_url:
-            m = re.search(r"x\\.com/([^/]+)/status/(\\d+)", tweet_url)
+            m = re.search(r"x\.com/([^/]+)/status/(\d+)", tweet_url)
             if m:
                 author = m.group(1)
                 tweet_id = m.group(2)
@@ -133,13 +134,18 @@ def main():
         context.add_cookies(cookies)
         page = context.new_page()
 
+        page.route(
+            "**/*",
+            lambda route: route.abort()
+            if route.request.resource_type in ["image", "media", "font"]
+            else route.continue_()
+        )
+
         for list_id in config["lists"]:
             try:
                 items = extract_list_items(page, list_id)
 
-                prev_seen = set(seen.get(list_id, []))
                 merged = []
-
                 for item in items:
                     merged.append(item)
 
